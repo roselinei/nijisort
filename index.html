@@ -716,69 +716,96 @@
 ];
     // ▲▲▲ ここまで ▲▲▲
 
-    // --- ここから下はソートのアルゴリズム（変更不要） ---
-    let parent = [], parentNext = [], cmp1 = [], cmp2 = [], head1 = 0, head2 = 0, merged = [];
-    let totalBattles = 0, currentBattle = 0;
+      // --- 5択ソート（5-way Merge Sort）のアルゴリズム ---
+    let parent = [], parentNext = [];
+    let currentGroups = [], currentHeads = [], merged = [];
+    let totalClicks = 0, currentClicks = 0;
 
     function initSort() {
       parent = members.map(m => [m]);
       parentNext = [];
+      
       let n = members.length;
-      totalBattles = Math.ceil(n * Math.log2(n)); 
-      currentBattle = 0;
+      totalClicks = Math.ceil(n * (Math.log(n) / Math.log(5))); 
+      currentClicks = 0;
+      
       setupNextMerge();
     }
 
     function setupNextMerge() {
-      if (parent.length <= 1) {
-        if (parent.length === 1 && parentNext.length === 0) {
-          showResult(parent[0]); 
+      if (parent.length === 0) {
+        if (parentNext.length <= 1) {
+          showResult(parentNext[0]); 
           return;
         }
-        parent = parentNext.concat(parent);
+        parent = parentNext;
         parentNext = [];
       }
-      cmp1 = parent.shift();
-      cmp2 = parent.shift();
-      head1 = 0;
-      head2 = 0;
+
+      currentGroups = parent.splice(0, 5);
+      currentHeads = new Array(currentGroups.length).fill(0);
       merged = [];
+
+      if (currentGroups.length === 1) {
+        parentNext.push(currentGroups[0]);
+        setupNextMerge();
+        return;
+      }
+
       showBattle();
     }
 
     function showBattle() {
-      const left = cmp1[head1];
-      const right = cmp2[head2];
-      document.getElementById('battle-field').innerHTML = `
-        <button class="character-btn" onclick="select(1)">
-          <img src="${left.image}" alt="${left.name}" class="character-img">
-          <span>${left.name}</span>
-        </button>
-        <button class="character-btn" onclick="select(2)">
-          <img src="${right.image}" alt="${right.name}" class="character-img">
-          <span>${right.name}</span>
-        </button>
-      `;
-      currentBattle++;
-      const progress = Math.min(99, (currentBattle / totalBattles) * 100);
-      document.getElementById('progress-fill').style.width = progress + '%';
+      let html = '';
+      for (let i = 0; i < currentGroups.length; i++) {
+        if (currentHeads[i] < currentGroups[i].length) {
+          let member = currentGroups[i][currentHeads[i]];
+          html += `
+            <button class="character-btn" onclick="selectMember(${i})">
+              <img src="${member.image}" alt="${member.name}" class="character-img">
+              <span>${member.name}</span>
+            </button>
+          `;
+        }
+      }
+      document.getElementById('battle-field').innerHTML = html;
+      updateProgress();
     }
 
-    function select(winner) {
-      if (winner === 1) { merged.push(cmp1[head1]); head1++; } 
-      else { merged.push(cmp2[head2]); head2++; }
+    function selectMember(groupIndex) {
+      merged.push(currentGroups[groupIndex][currentHeads[groupIndex]]);
+      currentHeads[groupIndex]++;
+      currentClicks++;
 
-      if (head1 >= cmp1.length) {
-        merged = merged.concat(cmp2.slice(head2));
+      let activeCount = 0;
+      let lastActiveIndex = -1;
+
+      for (let i = 0; i < currentGroups.length; i++) {
+        if (currentHeads[i] < currentGroups[i].length) {
+          activeCount++;
+          lastActiveIndex = i;
+        }
+      }
+
+      if (activeCount === 0) {
         parentNext.push(merged);
         setupNextMerge();
-      } else if (head2 >= cmp2.length) {
-        merged = merged.concat(cmp1.slice(head1));
+      } else if (activeCount === 1) {
+        let remaining = currentGroups[lastActiveIndex].slice(currentHeads[lastActiveIndex]);
+        merged = merged.concat(remaining);
+        currentClicks += remaining.length; 
         parentNext.push(merged);
         setupNextMerge();
       } else {
         showBattle();
       }
+    }
+
+    function updateProgress() {
+      let percent = Math.floor((currentClicks / totalClicks) * 100);
+      if (percent > 99) percent = 99; 
+      document.getElementById('progress-text').innerText = `進行度: ${percent}%`;
+      document.getElementById('progress-fill').style.width = percent + '%';
     }
 
     function showResult(sortedList) {
@@ -795,11 +822,14 @@
       });
       html += '</div>';
       document.getElementById('battle-field').innerHTML = html;
+      
+      document.getElementById('progress-text').innerText = `進行度: 100% (完了!)`;
       document.getElementById('progress-fill').style.width = '100%';
       document.getElementById('progress-fill').style.backgroundColor = '#03dac6';
     }
 
     initSort();
+
   </script>
 </body>
 </html>
