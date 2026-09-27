@@ -6,10 +6,13 @@
   <title>にじさんじソート</title>
   <style>
     body { background-color: #121212; color: #ffffff; font-family: sans-serif; text-align: center; margin: 0; padding: 15px; }
-    .battle-container { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-    .character-btn { background-color: #1e1e1e; border: 2px solid #333; border-radius: 12px; padding: 10px; color: white; font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; }
+    /* 2列のグリッド表示にする */
+    .battle-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+    /* 縦並びにして枠を調整 */
+    .character-btn { background-color: #1e1e1e; border: 2px solid #333; border-radius: 12px; padding: 10px; color: white; font-size: 13px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; }
     .character-btn:active { background-color: #333; }
-    .character-img { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; background-color: #444; }
+    /* 画像を大きく四角にする（1:1の比率） */
+    .character-img { width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; object-fit: cover; background-color: #444; }
     #progress-container { margin-top: 20px; text-align: right; font-size: 14px; font-weight: bold; color: #bb86fc; }
     #progress-bar { width: 100%; height: 10px; background-color: #333; border-radius: 5px; margin-top: 5px; overflow: hidden; }
     #progress-fill { height: 100%; background-color: #bb86fc; width: 0%; transition: width 0.3s; }
@@ -21,7 +24,6 @@
 
   <div class="battle-container" id="battle-field"></div>
   
-  <!-- ↓ここで％を表示します↓ -->
   <div id="progress-container">
     <span id="progress-text">進行度: 0%</span>
     <div id="progress-bar"><div id="progress-fill"></div></div>
@@ -30,7 +32,6 @@
   <script>
     // ▼▼▼ 先ほどコピーした const members = [...] のコードをこの下に貼り付けます ▼▼▼
 
-    // ▼▼▼ 先ほどコピーした const members = [...] のコードをこの下に貼り付けます ▼▼▼
 
  const members = [
   {
@@ -724,7 +725,7 @@
 ];
     // ▲▲▲ ここまで ▲▲▲
 
-     // --- 5択トーナメント（勝ち抜き）方式のアルゴリズム ---
+    // --- 4択トーナメント（勝ち抜き）方式のアルゴリズム ---
     let activePool = [];
     let nextPool = [];
     let eliminatedThisRound = [];
@@ -735,20 +736,19 @@
     let currentGroup = [];
 
     function initSort() {
-      // 1回戦のグループ分けをランダムにするためにシャッフル
       activePool = [...members].sort(() => Math.random() - 0.5);
       nextPool = [];
       eliminatedThisRound = [];
       finalRanking = [];
       currentBattle = 0;
 
-      // プログレスバー（％）用の総対戦数を正確に事前計算
       let tempArray = new Array(members.length).fill(0);
       totalBattles = 0;
       while (tempArray.length > 1) {
         let nextArr = [];
         while (tempArray.length > 0) {
-          let group = tempArray.splice(0, 5);
+          // 4人ずつ取り出して計算
+          let group = tempArray.splice(0, 4);
           if (group.length > 1) totalBattles++;
           nextArr.push(0);
         }
@@ -759,28 +759,23 @@
     }
 
     function nextMatch() {
-      // 現在のラウンド（回戦）が終わったかどうかの判定
       if (activePool.length === 0) {
-        // このラウンドで敗退したメンバーを最終ランキングの下位に追加
         finalRanking = eliminatedThisRound.concat(finalRanking);
         eliminatedThisRound = [];
 
-        // 勝ち残りが1人になったら優勝（ソート完了）
         if (nextPool.length === 1) {
           finalRanking = nextPool.concat(finalRanking);
           showResult(finalRanking);
           return;
         }
 
-        // 次のラウンドへ移行
         activePool = nextPool;
         nextPool = [];
       }
 
-      // プールから最大5人を取り出して対戦グループを作成
-      currentGroup = activePool.splice(0, 5);
+      // プールから最大4人を取り出して対戦グループを作成
+      currentGroup = activePool.splice(0, 4);
 
-      // グループが1人しかいない場合（端数）は、不戦勝で自動的に次へ進む
       if (currentGroup.length === 1) {
         nextPool.push(currentGroup[0]);
         nextMatch();
@@ -802,19 +797,16 @@
       });
       document.getElementById('battle-field').innerHTML = html;
 
-      // プログレスバーの更新
       let percent = Math.floor((currentBattle / totalBattles) * 100);
-      if (percent > 99) percent = 99; // 完了画面が出るまでは99%で止める
+      if (percent > 99) percent = 99; 
       document.getElementById('progress-text').innerText = `進行度: ${percent}%`;
       document.getElementById('progress-fill').style.width = percent + '%';
     }
 
     function selectMember(winnerIdx) {
-      // 選ばれた1人は次のラウンドへ
       let winner = currentGroup[winnerIdx];
       nextPool.push(winner);
 
-      // 選ばれなかった残りのメンバーは敗退リストへ
       currentGroup.forEach((member, idx) => {
         if (idx !== winnerIdx) {
           eliminatedThisRound.push(member);
@@ -822,37 +814,42 @@
       });
 
       currentBattle++;
-      nextMatch(); // 次の対戦へ
+      nextMatch(); 
     }
 
     function showResult(sortedList) {
+      // 結果画面はグリッドから通常の縦並びリストに戻す
+      let battleField = document.getElementById('battle-field');
+      battleField.style.display = 'flex';
+      battleField.style.flexDirection = 'column';
+
       let html = '<h3 style="margin-bottom: 20px;">🎉 最終結果 🎉</h3>';
       html += '<div style="text-align: left; background: #1e1e1e; border-radius: 12px; padding: 15px;">';
       
       sortedList.forEach((member, index) => {
+        // 結果画面の画像は元の丸い小さなアイコンにする
         html += `
           <div style="display: flex; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
             <span style="font-size: 20px; font-weight: bold; width: 40px; color: #bb86fc;">${index + 1}</span>
-            <img src="${member.image}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; background: #444;">
+            <img src="${member.image}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 15px; background: #444;">
             <span style="font-size: 16px;">${member.name}</span>
           </div>
         `;
       });
       html += '</div>';
-      document.getElementById('battle-field').innerHTML = html;
+      battleField.innerHTML = html;
       
       document.getElementById('progress-text').innerText = `進行度: 100% (完了!)`;
       document.getElementById('progress-fill').style.width = '100%';
       document.getElementById('progress-fill').style.backgroundColor = '#03dac6';
     }
 
-     // データが存在すれば起動
     if (typeof members !== 'undefined') {
       initSort();
     } else {
       document.getElementById('battle-field').innerHTML = '<p style="color: #ff5252;">データが読み込めません</p>';
     }
-
   </script>
 </body>
 </html>
+
