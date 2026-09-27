@@ -716,39 +716,66 @@
 ];
     // ▲▲▲ ここまで ▲▲▲
 
-      // --- 5択ソート（5-way Merge Sort）のアルゴリズム ---
-    let parent = [], parentNext = [];
-    let currentGroups = [], currentHeads = [], merged = [];
-    let totalClicks = 0, currentClicks = 0;
+     // --- 5択トーナメント（勝ち抜き）方式のアルゴリズム ---
+    let activePool = [];
+    let nextPool = [];
+    let eliminatedThisRound = [];
+    let finalRanking = [];
+    
+    let totalBattles = 0;
+    let currentBattle = 0;
+    let currentGroup = [];
 
     function initSort() {
-      parent = members.map(m => [m]);
-      parentNext = [];
-      
-      let n = members.length;
-      totalClicks = Math.ceil(n * (Math.log(n) / Math.log(5))); 
-      currentClicks = 0;
-      
-      setupNextMerge();
-    }
+      // 1回戦のグループ分けをランダムにするためにシャッフル
+      activePool = [...members].sort(() => Math.random() - 0.5);
+      nextPool = [];
+      eliminatedThisRound = [];
+      finalRanking = [];
+      currentBattle = 0;
 
-    function setupNextMerge() {
-      if (parent.length === 0) {
-        if (parentNext.length <= 1) {
-          showResult(parentNext[0]); 
-          return;
+      // プログレスバー（％）用の総対戦数を正確に事前計算
+      let tempArray = new Array(members.length).fill(0);
+      totalBattles = 0;
+      while (tempArray.length > 1) {
+        let nextArr = [];
+        while (tempArray.length > 0) {
+          let group = tempArray.splice(0, 5);
+          if (group.length > 1) totalBattles++;
+          nextArr.push(0);
         }
-        parent = parentNext;
-        parentNext = [];
+        tempArray = nextArr;
       }
 
-      currentGroups = parent.splice(0, 5);
-      currentHeads = new Array(currentGroups.length).fill(0);
-      merged = [];
+      nextMatch();
+    }
 
-      if (currentGroups.length === 1) {
-        parentNext.push(currentGroups[0]);
-        setupNextMerge();
+    function nextMatch() {
+      // 現在のラウンド（回戦）が終わったかどうかの判定
+      if (activePool.length === 0) {
+        // このラウンドで敗退したメンバーを最終ランキングの下位に追加
+        finalRanking = eliminatedThisRound.concat(finalRanking);
+        eliminatedThisRound = [];
+
+        // 勝ち残りが1人になったら優勝（ソート完了）
+        if (nextPool.length === 1) {
+          finalRanking = nextPool.concat(finalRanking);
+          showResult(finalRanking);
+          return;
+        }
+
+        // 次のラウンドへ移行
+        activePool = nextPool;
+        nextPool = [];
+      }
+
+      // プールから最大5人を取り出して対戦グループを作成
+      currentGroup = activePool.splice(0, 5);
+
+      // グループが1人しかいない場合（端数）は、不戦勝で自動的に次へ進む
+      if (currentGroup.length === 1) {
+        nextPool.push(currentGroup[0]);
+        nextMatch();
         return;
       }
 
@@ -757,60 +784,43 @@
 
     function showBattle() {
       let html = '';
-      for (let i = 0; i < currentGroups.length; i++) {
-        if (currentHeads[i] < currentGroups[i].length) {
-          let member = currentGroups[i][currentHeads[i]];
-          html += `
-            <button class="character-btn" onclick="selectMember(${i})">
-              <img src="${member.image}" alt="${member.name}" class="character-img">
-              <span>${member.name}</span>
-            </button>
-          `;
-        }
-      }
+      currentGroup.forEach((member, idx) => {
+        html += `
+          <button class="character-btn" onclick="selectMember(${idx})">
+            <img src="${member.image}" alt="${member.name}" class="character-img">
+            <span>${member.name}</span>
+          </button>
+        `;
+      });
       document.getElementById('battle-field').innerHTML = html;
-      updateProgress();
-    }
 
-    function selectMember(groupIndex) {
-      merged.push(currentGroups[groupIndex][currentHeads[groupIndex]]);
-      currentHeads[groupIndex]++;
-      currentClicks++;
-
-      let activeCount = 0;
-      let lastActiveIndex = -1;
-
-      for (let i = 0; i < currentGroups.length; i++) {
-        if (currentHeads[i] < currentGroups[i].length) {
-          activeCount++;
-          lastActiveIndex = i;
-        }
-      }
-
-      if (activeCount === 0) {
-        parentNext.push(merged);
-        setupNextMerge();
-      } else if (activeCount === 1) {
-        let remaining = currentGroups[lastActiveIndex].slice(currentHeads[lastActiveIndex]);
-        merged = merged.concat(remaining);
-        currentClicks += remaining.length; 
-        parentNext.push(merged);
-        setupNextMerge();
-      } else {
-        showBattle();
-      }
-    }
-
-    function updateProgress() {
-      let percent = Math.floor((currentClicks / totalClicks) * 100);
-      if (percent > 99) percent = 99; 
+      // プログレスバーの更新
+      let percent = Math.floor((currentBattle / totalBattles) * 100);
+      if (percent > 99) percent = 99; // 完了画面が出るまでは99%で止める
       document.getElementById('progress-text').innerText = `進行度: ${percent}%`;
       document.getElementById('progress-fill').style.width = percent + '%';
     }
 
+    function selectMember(winnerIdx) {
+      // 選ばれた1人は次のラウンドへ
+      let winner = currentGroup[winnerIdx];
+      nextPool.push(winner);
+
+      // 選ばれなかった残りのメンバーは敗退リストへ
+      currentGroup.forEach((member, idx) => {
+        if (idx !== winnerIdx) {
+          eliminatedThisRound.push(member);
+        }
+      });
+
+      currentBattle++;
+      nextMatch(); // 次の対戦へ
+    }
+
     function showResult(sortedList) {
-      let html = '<h3 style="margin-bottom: 20px;">🎉 結果発表 🎉</h3>';
+      let html = '<h3 style="margin-bottom: 20px;">🎉 最終結果 🎉</h3>';
       html += '<div style="text-align: left; background: #1e1e1e; border-radius: 12px; padding: 15px;">';
+      
       sortedList.forEach((member, index) => {
         html += `
           <div style="display: flex; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
@@ -827,6 +837,14 @@
       document.getElementById('progress-fill').style.width = '100%';
       document.getElementById('progress-fill').style.backgroundColor = '#03dac6';
     }
+
+    // データが存在すれば起動
+    if (typeof members !== 'undefined') {
+      initSort();
+    } else {
+      document.getElementById('battle-field').innerHTML = '<p style="color: #ff5252;">データが読み込めません</p>';
+    }
+
 
     initSort();
 
